@@ -1,22 +1,38 @@
 'use client';
 
 import { useState } from 'react';
-import { mockOrders, formatZAR } from '@/lib/mockData';
+import { createClient } from '@/utils/supabase/client';
+import { formatZAR } from '@/lib/mockData';
 
 export default function TrackingPage() {
+  const supabase = createClient();
   const [orderId, setOrderId] = useState('');
   const [order, setOrder] = useState(null);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleTrack = (e) => {
+  const handleTrack = async (e) => {
     e.preventDefault();
     setError('');
-    const found = mockOrders.find(o => o.id.toLowerCase() === orderId.toLowerCase().trim());
-    if (found) {
-      setOrder(found);
-    } else {
-      setOrder(null);
-      setError('Order not found. Please check your Order ID.');
+    setOrder(null);
+    setIsLoading(true);
+
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId.trim())
+        .single();
+
+      if (fetchError || !data) {
+        setError('Order not found. Please check your Order ID.');
+      } else {
+        setOrder(data);
+      }
+    } catch (err) {
+      setError('An error occurred while fetching the order.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -35,12 +51,12 @@ export default function TrackingPage() {
           type="text"
           value={orderId}
           onChange={(e) => setOrderId(e.target.value)}
-          placeholder="Order ID (e.g., ord-12345)"
+          placeholder="Paste your Order ID here"
           className="flex-1 px-4 py-3 border border-luxury-border bg-luxury-card text-luxury-text focus:outline-none focus:border-luxury-text transition-colors"
           required
         />
-        <button type="submit" className="px-8 py-3 bg-luxury-text text-white text-sm font-semibold tracking-widest uppercase hover:bg-luxury-accent transition-colors">
-          Track
+        <button type="submit" disabled={isLoading} className="px-8 py-3 bg-luxury-text text-white text-sm font-semibold tracking-widest uppercase hover:bg-luxury-accent transition-colors disabled:opacity-50">
+          {isLoading ? '...' : 'Track'}
         </button>
       </form>
 
@@ -51,7 +67,7 @@ export default function TrackingPage() {
           <div className="flex justify-between items-center mb-10 pb-6 border-b border-luxury-border">
             <div>
               <p className="text-xs text-luxury-muted uppercase tracking-wider">Order ID</p>
-              <p className="text-lg text-luxury-text font-medium">{order.id}</p>
+              <p className="text-sm text-luxury-text font-medium truncate max-w-[200px]">{order.id}</p>
             </div>
             <div className="text-right">
               <p className="text-xs text-luxury-muted uppercase tracking-wider">Total</p>
@@ -87,10 +103,6 @@ export default function TrackingPage() {
           </div>
         </div>
       )}
-      
-      <p className="text-center text-xs text-luxury-muted mt-8">
-        Hint for testing: Use Order IDs <strong>ord-12345</strong> or <strong>ord-67890</strong>
-      </p>
     </div>
   );
 }
