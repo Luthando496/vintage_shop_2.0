@@ -35,46 +35,36 @@ export default function CheckoutPage() {
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  const handleSubmit = async (e) => {
+    const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
-      const fullAddress = `${formData.address}, ${formData.city}, ${formData.postalCode}`;
-
-      const { data: orderData, error: orderError } = await supabase
-        .from('orders')
-        .insert([{
-          customer_name: formData.name,
-          customer_email: formData.email,
-          shipping_address: fullAddress,
+      // Call our API route to create the Stripe session and save the pending order
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: items,
+          customerDetails: formData,
           subtotal: getSubtotal(),
           vat: getVat(),
-          total_amount: getTotal(),
-          status: 'Pending',
-        }])
-        .select()
-        .single();
+          total: getTotal(),
+        }),
+      });
 
-      if (orderError) throw orderError;
+      const session = await response.json();
 
-      const orderItemsToInsert = items.map(item => ({
-        order_id: orderData.id,
-        product_id: item.id,
-        price_at_purchase: item.price_zar
-      }));
-
-      const { error: itemsError } = await supabase.from('order_items').insert(orderItemsToInsert);
-      if (itemsError) throw itemsError;
-
-      clearCart();
-      alert('Order placed successfully! We will send a confirmation to your email.');
-      router.push('/');
+      if (session.url) {
+        // Redirect the user to the secure Stripe Checkout page!
+        window.location.href = session.url;
+      } else {
+        throw new Error('Failed to create checkout session');
+      }
 
     } catch (error) {
       console.error('Checkout Error:', error);
       alert('There was an error processing your order. Please try again.');
-    } finally {
       setIsSubmitting(false);
     }
   };
