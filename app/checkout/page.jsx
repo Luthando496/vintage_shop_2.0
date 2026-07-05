@@ -1,7 +1,7 @@
 'use client';
-
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+// ... keep the other imports
 import useCartStore from '@/store/useCartStore';
 import { createClient } from '@/utils/supabase/client';
 import { formatZAR } from '@/lib/mockData';
@@ -19,6 +19,32 @@ const InputField = ({ label, name, type = 'text', value, onChange }) => (
 
 export default function CheckoutPage() {
   const router = useRouter();
+    const searchParams = useSearchParams();
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        // If not logged in, redirect to login page. 
+        // We pass a 'redirect' parameter so the login page knows where to send them after!
+        router.push('/login?redirect=/checkout');
+      } else {
+        setIsCheckingAuth(false);
+      }
+    };
+    checkUser();
+  }, [router, supabase.auth]);
+
+  // Show a quick loading state while checking auth
+  if (isCheckingAuth) {
+    return (
+      <div className="max-w-7xl mx-auto px-6 lg:px-8 py-32 text-center">
+        <p className="text-luxury-muted">Verifying your account...</p>
+      </div>
+    );
+  }
   const supabase = createClient();
   const { items, getSubtotal, getVat, getTotal, clearCart } = useCartStore();
   
