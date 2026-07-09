@@ -1,7 +1,7 @@
 'use client';
+
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-// ... keep the other imports
+import { useRouter } from 'next/navigation';
 import useCartStore from '@/store/useCartStore';
 import { createClient } from '@/utils/supabase/client';
 import { formatZAR } from '@/lib/mockData';
@@ -19,33 +19,9 @@ const InputField = ({ label, name, type = 'text', value, onChange }) => (
 
 export default function CheckoutPage() {
   const router = useRouter();
-    const searchParams = useSearchParams();
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-
-  useEffect(() => {
-    const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        // If not logged in, redirect to login page. 
-        // We pass a 'redirect' parameter so the login page knows where to send them after!
-        router.push('/login?redirect=/checkout');
-      } else {
-        setIsCheckingAuth(false);
-      }
-    };
-    checkUser();
-  }, [router, supabase.auth]);
-
-  // Show a quick loading state while checking auth
-  if (isCheckingAuth) {
-    return (
-      <div className="max-w-7xl mx-auto px-6 lg:px-8 py-32 text-center">
-        <p className="text-luxury-muted">Verifying your account...</p>
-      </div>
-    );
-  }
-  const supabase = createClient();
+  
+  // FIX: Supabase MUST be initialized at the very top, before any useEffects
+  const supabase = createClient(); 
   const { items, getSubtotal, getVat, getTotal, clearCart } = useCartStore();
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -53,6 +29,33 @@ export default function CheckoutPage() {
     name: '', email: '', address: '', city: '', postalCode: ''
   });
 
+  // 1. Protect Route: Redirect if not logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/login?redirect=/checkout');
+      }
+    };
+    checkAuth();
+  }, [router]);
+
+  // 2. Pre-fill user data from Supabase Auth
+  useEffect(() => {
+    const loadUserData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setFormData(prev => ({
+          ...prev,
+          email: user.email || '',
+          name: user.user_metadata?.full_name || ''
+        }));
+      }
+    };
+    loadUserData();
+  }, []);
+
+  // 3. Redirect if cart is empty
   useEffect(() => {
     if (items.length === 0) {
       router.push('/cart');
@@ -61,12 +64,11 @@ export default function CheckoutPage() {
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-    const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
-      // Call our API route to create the Stripe session and save the pending order
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -82,12 +84,10 @@ export default function CheckoutPage() {
       const session = await response.json();
 
       if (session.url) {
-        // Redirect the user to the secure Stripe Checkout page!
         window.location.href = session.url;
       } else {
         throw new Error('Failed to create checkout session');
       }
-
     } catch (error) {
       console.error('Checkout Error:', error);
       alert('There was an error processing your order. Please try again.');
@@ -114,12 +114,12 @@ export default function CheckoutPage() {
 
           <h2 className="font-serif text-2xl text-luxury-text mt-16 mb-8">Payment</h2>
           <div className="p-8 border border-luxury-border bg-luxury-card text-center">
-            <p className="text-luxury-muted text-sm mb-4">Secure payment powered by Stripe</p>
+            <p className="text-luxury-muted text-sm mb-4">Secure payment powered by Paystack</p>
             <div className="flex justify-center gap-4 text-luxury-muted">
               <span className="text-xs uppercase tracking-wider border border-luxury-border px-3 py-1">Visa</span>
               <span className="text-xs uppercase tracking-wider border border-luxury-border px-3 py-1">Mastercard</span>
             </div>
-            <p className="text-xs text-luxury-muted mt-6">(Currently using mock checkout. Stripe integration coming soon!)</p>
+            <p className="text-xs text-luxury-muted mt-6">You will be redirected to Paystack to complete your payment securely.</p>
           </div>
         </div>
 
